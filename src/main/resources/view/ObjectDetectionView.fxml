@@ -66,18 +66,20 @@
                         <Label text="Edge Detection (Canny)" style="-fx-font-weight: bold; -fx-font-size: 12px;"/>
                         <HBox spacing="10" alignment="CENTER_LEFT">
                             <Label text="Lower Threshold:" prefWidth="120"/>
-                            <Slider fx:id="cannyThreshold1Slider" min="10" max="200" value="50" 
+                            <Slider fx:id="cannyThreshold1Slider" min="10" max="100" value="30" 
                                     prefWidth="150" showTickLabels="false" showTickMarks="true"/>
-                            <Label fx:id="cannyThreshold1Label" text="50" prefWidth="40" 
+                            <Label fx:id="cannyThreshold1Label" text="30" prefWidth="40" 
                                    style="-fx-font-weight: bold;"/>
                         </HBox>
                         <HBox spacing="10" alignment="CENTER_LEFT">
                             <Label text="Upper Threshold:" prefWidth="120"/>
-                            <Slider fx:id="cannyThreshold2Slider" min="50" max="300" value="150" 
+                            <Slider fx:id="cannyThreshold2Slider" min="30" max="200" value="90" 
                                     prefWidth="150" showTickLabels="false" showTickMarks="true"/>
-                            <Label fx:id="cannyThreshold2Label" text="150" prefWidth="40" 
+                            <Label fx:id="cannyThreshold2Label" text="90" prefWidth="40" 
                                    style="-fx-font-weight: bold;"/>
                         </HBox>
+                        <Button text="Auto-Calculate Thresholds" onAction="#autoCalculateThresholds"
+                                style="-fx-font-size: 11px;" prefWidth="260"/>
                     </VBox>
                     
                     <Separator/>
@@ -111,6 +113,20 @@
                             <Slider fx:id="maxRadiusSlider" min="50" max="400" value="200" 
                                     prefWidth="150" showTickLabels="false" showTickMarks="true"/>
                             <Label fx:id="maxRadiusLabel" text="200" prefWidth="40" 
+                                   style="-fx-font-weight: bold;"/>
+                        </HBox>
+                    </VBox>
+                    
+                    <Separator/>
+                    
+                    <!-- Interface Detection Parameters -->
+                    <VBox spacing="8">
+                        <Label text="Interface Detection" style="-fx-font-weight: bold; -fx-font-size: 12px;"/>
+                        <HBox spacing="10" alignment="CENTER_LEFT">
+                            <Label text="Peak Height Ratio:" prefWidth="120"/>
+                            <Slider fx:id="peakHeightRatioSlider" min="0.05" max="0.5" value="0.15" 
+                                    prefWidth="150" showTickLabels="false" showTickMarks="true"/>
+                            <Label fx:id="peakHeightRatioLabel" text="0.15" prefWidth="40" 
                                    style="-fx-font-weight: bold;"/>
                         </HBox>
                     </VBox>

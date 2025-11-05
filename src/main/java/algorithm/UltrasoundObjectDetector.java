@@ -18,20 +18,23 @@ public class UltrasoundObjectDetector {
 
     private static final Logger logger = Logger.getLogger(UltrasoundObjectDetector.class.getName());
 
-    // Detection parameters that can be adjusted
-    private double cannyThreshold1 = 50;
-    private double cannyThreshold2 = 150;
+    // Detection parameters that can be adjusted (optimized defaults for ultrasound)
+    private double cannyThreshold1 = 30;   // Lowered for ultrasound (was 50)
+    private double cannyThreshold2 = 90;   // Lowered for ultrasound (was 150)
     private int houghThreshold = 100;
     private double minLineLength = 50;
     private double maxLineGap = 10;
 
-    // Circle detection parameters
+    // Circle detection parameters (tuned for ultrasound)
     private double dp = 1.2;
-    private double minDist = 50;
+    private double minDist = 80;  // Increased to avoid duplicates
     private int circleParam1 = 100;
-    private int circleParam2 = 30;
+    private int circleParam2 = 20;  // Lowered for ultrasound (was 30)
     private int minRadius = 10;
     private int maxRadius = 200;
+
+    // Interface detection parameters
+    private double minPeakHeightRatio = 0.15;  // Ratio of image width (0.1-0.2 typical)
 
 
     /**
@@ -136,15 +139,18 @@ public class UltrasoundObjectDetector {
         // Apply Canny edge detection
         Imgproc.Canny(gray, edges, cannyThreshold1, cannyThreshold2);
 
-        // Extract all edge points
+        // Extract all edge points using Core.findNonZero (much faster than nested loops)
+        Mat edgePointsMat = new Mat();
+        Core.findNonZero(edges, edgePointsMat);
+        
         List<Point> edgePoints = new ArrayList<>();
-        for (int y = 0; y < edges.rows(); y++) {
-            for (int x = 0; x < edges.cols(); x++) {
-                if (edges.get(y, x)[0] > 0) {
-                    edgePoints.add(new Point(x, y));
-                }
+        if (edgePointsMat.rows() > 0) {
+            for (int i = 0; i < edgePointsMat.rows(); i++) {
+                double[] pt = edgePointsMat.get(i, 0);
+                edgePoints.add(new Point(pt[0], pt[1]));
             }
         }
+        edgePointsMat.release();
 
         logger.info("RANSAC: Starting with " + edgePoints.size() + " edge points");
 
@@ -171,8 +177,12 @@ public class UltrasoundObjectDetector {
         // Iterative RANSAC: Find multiple lines by repeatedly finding and removing inliers
         int maxLines = 20;  // Maximum number of lines to detect
         int minInliers = 50;  // Minimum inliers to consider a valid line
-        double inlierThreshold = 3.0;  // Distance threshold in pixels
+        // Adaptive inlier threshold based on image scale (3px for 640x480 baseline)
+        double baselineSize = 640.0;
+        double imageScale = Math.sqrt(image.cols() * image.rows()) / baselineSize;
+        double inlierThreshold = 3.0 * imageScale;
         int ransacIterations = 1000;  // RANSAC iterations per line
+        double minInlierRatio = 0.02;  // Early-exit if inlier ratio falls below 2%
         
         java.util.Random rand = new java.util.Random();
         Scalar[] lineColors = {
@@ -255,6 +265,17 @@ public class UltrasoundObjectDetector {
             
             // Check if we found a valid line
             if (bestLine != null && bestInlierCount >= minInliers) {
+                // Early-exit: stop if inlier ratio falls below minimum threshold
+                double inlierRatio = (double) bestInlierCount / edgePoints.size();
+                if (inlierRatio < minInlierRatio) {
+                    logger.info(String.format("RANSAC: Early exit - inlier ratio %.3f%% below threshold %.1f%%",
+                        inlierRatio * 100, minInlierRatio * 100));
+                    break;
+                }
+                
+                // Clip line endpoints to image bounds
+                bestLine = clipLineToImage(bestLine, image.cols(), image.rows());
+                
                 detectedLines.add(bestLine);
                 inlierCounts.add(bestInlierCount);
                 double confidence = 100.0 * bestInlierCount / edgePoints.size();
@@ -472,7 +493,9 @@ public class UltrasoundObjectDetector {
         }
 
         // Find peaks in projection (horizontal lines)
-        List<Integer> peaks = findPeaks(projection, edges.cols() / 4);
+        // Use configurable ratio instead of hardcoded cols()/4
+        int minPeakHeight = (int) (edges.cols() * minPeakHeightRatio);
+        List<Integer> peaks = findPeaks(projection, minPeakHeight);
 
         List<double[]> linesList = new ArrayList<>();
         Mat visualImage = null;
@@ -507,6 +530,84 @@ public class UltrasoundObjectDetector {
     }
 
     /**
+     * Automatically estimates optimal Canny thresholds for an ultrasound image
+     * Uses gradient magnitude statistics for robust threshold selection
+     *
+     * @param image Input ultrasound image
+     * @return double[2] array: [lowerThreshold, upperThreshold]
+     */
+    public double[] estimateCannyThresholds(Mat image) {
+        Mat gray = new Mat();
+
+        // Convert to grayscale if needed
+        if (image.channels() == 3) {
+            Imgproc.cvtColor(image, gray, Imgproc.COLOR_BGR2GRAY);
+        } else {
+            gray = image.clone();
+        }
+
+        // Apply CLAHE preprocessing (same as in detection)
+        Mat enhanced = new Mat();
+        org.opencv.imgproc.CLAHE clahe = Imgproc.createCLAHE(2.0, new Size(8, 8));
+        clahe.apply(gray, enhanced);
+
+        // Apply bilateral filter
+        Mat denoised = new Mat();
+        Imgproc.bilateralFilter(enhanced, denoised, 9, 75, 75);
+
+        // Calculate gradient magnitudes using Sobel
+        Mat gradX = new Mat();
+        Mat gradY = new Mat();
+        Imgproc.Sobel(denoised, gradX, org.opencv.core.CvType.CV_32F, 1, 0, 3);
+        Imgproc.Sobel(denoised, gradY, org.opencv.core.CvType.CV_32F, 0, 1, 3);
+
+        Mat magnitude = new Mat();
+        Core.magnitude(gradX, gradY, magnitude);
+
+        // Convert to 8-bit for percentile calculation
+        Mat magnitude8U = new Mat();
+        magnitude.convertTo(magnitude8U, org.opencv.core.CvType.CV_8U);
+
+        // Calculate percentiles of gradient magnitudes
+        // For ultrasound: use lower percentiles due to speckle noise
+        MatOfDouble mean = new MatOfDouble();
+        MatOfDouble stddev = new MatOfDouble();
+        Core.meanStdDev(magnitude8U, mean, stddev);
+
+        double meanGrad = mean.get(0, 0)[0];
+        double stdGrad = stddev.get(0, 0)[0];
+
+        // Threshold estimation based on gradient statistics
+        // Lower threshold: mean - 0.5*std (conservative to preserve edges)
+        // Upper threshold: mean + 1.5*std
+        double lowerThreshold = Math.max(15, meanGrad - 0.5 * stdGrad);
+        double upperThreshold = meanGrad + 1.5 * stdGrad;
+
+        // Ensure proper ratio between thresholds (typically 2:1 to 3:1)
+        if (upperThreshold < lowerThreshold * 2) {
+            upperThreshold = lowerThreshold * 2.5;
+        }
+
+        // Clamp to reasonable ranges for ultrasound
+        lowerThreshold = Math.max(10, Math.min(80, lowerThreshold));
+        upperThreshold = Math.max(30, Math.min(200, upperThreshold));
+
+        logger.info(String.format("Auto-estimated Canny thresholds: %.1f / %.1f (gradient mean=%.1f, std=%.1f)",
+                lowerThreshold, upperThreshold, meanGrad, stdGrad));
+
+        // Cleanup
+        gray.release();
+        enhanced.release();
+        denoised.release();
+        gradX.release();
+        gradY.release();
+        magnitude.release();
+        magnitude8U.release();
+
+        return new double[]{lowerThreshold, upperThreshold};
+    }
+
+    /**
      * Enhanced preprocessing for ultrasound images
      * Applies denoising, contrast enhancement, and normalization
      *
@@ -523,10 +624,11 @@ public class UltrasoundObjectDetector {
             gray = image.clone();
         }
 
-        // Apply histogram equalization for contrast enhancement
-        // Very useful for ultrasound images with varying brightness
+        // Apply CLAHE (Contrast Limited Adaptive Histogram Equalization)
+        // Better than global equalization - avoids over-boosting speckle noise
         Mat enhanced = new Mat();
-        Imgproc.equalizeHist(gray, enhanced);
+        org.opencv.imgproc.CLAHE clahe = Imgproc.createCLAHE(2.0, new Size(8, 8));
+        clahe.apply(gray, enhanced);
 
         // Apply bilateral filter to reduce noise while preserving edges
         Mat denoised = new Mat();
@@ -536,6 +638,18 @@ public class UltrasoundObjectDetector {
         gray.release();
 
         return denoised;
+    }
+
+    /**
+     * Clips line endpoints to image boundaries
+     * Prevents coordinates from going off-image for near-vertical/horizontal lines
+     */
+    private double[] clipLineToImage(double[] line, int width, int height) {
+        double x1 = Math.max(0, Math.min(width - 1, line[0]));
+        double y1 = Math.max(0, Math.min(height - 1, line[1]));
+        double x2 = Math.max(0, Math.min(width - 1, line[2]));
+        double y2 = Math.max(0, Math.min(height - 1, line[3]));
+        return new double[]{x1, y1, x2, y2};
     }
 
     /**
@@ -561,6 +675,14 @@ public class UltrasoundObjectDetector {
         this.cannyThreshold2 = threshold2;
     }
 
+    public double getCannyThreshold1() {
+        return this.cannyThreshold1;
+    }
+
+    public double getCannyThreshold2() {
+        return this.cannyThreshold2;
+    }
+
     public void setHoughThreshold(int threshold) {
         this.houghThreshold = threshold;
     }
@@ -578,6 +700,14 @@ public class UltrasoundObjectDetector {
         this.circleParam2 = param2;
         this.minRadius = minRadius;
         this.maxRadius = maxRadius;
+    }
+
+    public void setMinPeakHeightRatio(double ratio) {
+        this.minPeakHeightRatio = Math.max(0.05, Math.min(0.5, ratio));  // Clamp to [0.05, 0.5]
+    }
+
+    public double getMinPeakHeightRatio() {
+        return this.minPeakHeightRatio;
     }
 
 }

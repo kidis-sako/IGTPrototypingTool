@@ -1,197 +1,183 @@
-# Ultrasound Object Detection Feature Guide
+# Ultrasound Object Detection Guide
 
 ## Overview
 
-The Object Detection feature provides computer vision algorithms for detecting geometric objects in ultrasound images, including lines (water bath boundaries, needles), circles (calibration spheres), and horizontal interfaces (tissue layers). The feature is fully integrated into the application via a dedicated tab with interactive controls.
+This feature detects geometric objects in ultrasound images: lines (needles, boundaries), circles (calibration spheres), and horizontal interfaces (tissue layers).
 
 ## Detection Algorithms
 
 ### Line Detection
 
 **Hough Line Detection**
-- Fast probabilistic transform-based detection
-- Detects multiple straight lines simultaneously
-- Best for clean images where speed is critical
-- Suitable for needle tracking and boundary detection
+- Fast detection of straight lines
+- Detects multiple lines at once
+- Best for clean images
 
 **RANSAC Line Detection**
-- Iterative robust detection method
-- Detects up to 20 lines ordered by prominence (most inliers first)
-- Handles all angles: horizontal, vertical, and diagonal
-- Automatically filters noise and outliers
-- Slower than Hough but significantly more accurate in noisy ultrasound images
-- First detected line typically represents the most prominent feature (e.g., water bath bottom)
-- Uses perpendicular distance calculation with 3-pixel inlier threshold
-- Prevents division-by-zero errors through angle-aware line extension
+- More accurate than Hough in noisy images
+- Detects up to 20 lines, ordered by strength
+- Handles all angles: horizontal, vertical, diagonal
+- Filters noise automatically
+- Slower but more reliable
 
 **Horizontal Interface Detection**
-- Specialized algorithm using histogram projection
-- Detects multiple horizontal features by analyzing edge pixel distribution per row
-- Very fast, optimized for horizontal boundaries only
+- Fast detection of horizontal features only
 - Ideal for tissue layers and water bath interfaces
+- Uses histogram analysis
+- Adjustable sensitivity via Peak Height Ratio slider (default: 0.15)
 
-### Circle/Sphere Detection
+### Circle Detection
 
 **Hough Circle Detection**
-- Accurate detection for perfect circular shapes
-- Voting-based algorithm for centers and radii
-- Slower but precise for calibration sphere detection
-- Includes Gaussian blur preprocessing to reduce noise
+- Accurate for perfect circular shapes
+- Best for calibration sphere detection
+- Slower but precise
 
 **Blob Sphere Detection**
-- Contour-based detection with circularity analysis
-- Works with irregular or imperfect circular shapes
-- Very fast compared to Hough circles
-- Filters by area (100-10,000 pixels) and circularity (>0.6)
-- Provides circularity scores for quality assessment
+- Works with imperfect circles
+- Very fast
+- Detects circles with circularity score > 0.6
+- Size range: 100-10,000 pixels
 
 ## Image Preprocessing
 
-All algorithms apply enhanced preprocessing:
-- Automatic grayscale conversion
-- Histogram equalization for contrast enhancement (critical for ultrasound images with varying brightness)
-- Bilateral filtering to reduce noise while preserving edges
+All algorithms automatically apply:
+- Grayscale conversion
+- CLAHE contrast enhancement
+- Bilateral noise filtering
+
+## Auto-Threshold Feature
+
+Automatically calculates optimal edge detection thresholds for your image.
+
+**How it works:**
+1. Analyzes image gradient statistics
+2. Sets lower threshold based on mean - 0.5×std
+3. Sets upper threshold based on mean + 1.5×std
+4. Clamps to safe ranges (10-80 lower, 30-200 upper)
+
+**When to use:**
+- First time with a new image or video
+- When default values (30/90) don't work well
+- As a starting point before fine-tuning
 
 ## User Interface
 
 ### Layout
-- **Left Panel:** Displays original image and detection results side-by-side
-- **Right Panel:** Algorithm selection, adjustable parameters, and results text output
+- **Left:** Original image and detection results side-by-side
+- **Right:** Algorithm selection, parameters, and text results
 
 ### Controls
-- **Load Current Frame:** Captures frame from active video stream
-- **Load Test Frame:** Loads embedded test image (needle.png) for demonstration
-- **Algorithm Dropdown:** Select from five detection methods
-- **Run Detection:** Executes selected algorithm
-- **Show Visualization:** Toggle annotated output with detected objects
+- **Load Current Frame:** Capture frame from video
+- **Load Test Frame:** Load demo image (needle.png)
+- **Algorithm Dropdown:** Choose detection method
+- **Run Detection:** Start detection
+- **Show Visualization:** Toggle result overlay
 
-### Adjustable Parameters
+### Parameters
 
-**Edge Detection (Canny)**
-- Lower Threshold (10-200): Controls edge sensitivity
-- Upper Threshold (50-300): Defines strong edges
+**Edge Detection**
+- Lower Threshold (10-100, default: 30): Edge sensitivity
+- Upper Threshold (30-200, default: 90): Strong edge cutoff
+- **Auto-Calculate Button**: Find optimal thresholds automatically
 
-**Line Detection (Hough)**
-- Hough Threshold (20-200): Minimum votes required for line detection
+**Line Detection**
+- Hough Threshold (20-200): Votes needed for detection
 
 **Circle Detection**
-- Min Radius (5-100 pixels): Smallest circle to detect
-- Max Radius (50-400 pixels): Largest circle to detect
+- Min Radius (5-100 pixels): Smallest circle size
+- Max Radius (50-400 pixels): Largest circle size
 
-## Integration Architecture
+**Interface Detection**
+- Peak Height Ratio (0.05-0.5, default: 0.15): Minimum peak height
 
-### Controller Connections
-- `ObjectDetectionController` connects to `VideoController` via `ImageDataManager`
-- Enables real-time frame capture from video streams
-- Injection happens in `MainController.initialize()`
+## How to Use
 
-### Tab Integration
-- Object Detection tab pre-loaded in `MainView.fxml`
-- Menu item in Window > Show View > Object Detection
-- Tab selection handled through `MainController.openObjectDetectionView()`
-
-### Processing Flow
-1. User loads video in Video Input tab
-2. Switches to Object Detection tab
-3. Loads current frame (freezes frame via Mat.clone())
-4. Selects algorithm and adjusts parameters via sliders
-5. Runs detection in background thread (prevents UI freezing)
-6. Views results in text area and annotated visualization
+1. Load video in Video Input tab
+2. Switch to Object Detection tab
+3. Click "Load Current Frame"
+4. Select algorithm from dropdown
+5. Click "Auto-Calculate Thresholds" (recommended)
+6. Adjust parameters if needed using sliders
+7. Click "Run Detection"
+8. View results in text area and visualization
 
 ## Detection Results
 
-### Line Detection Output
-Each detected line includes:
-- Start and end coordinates
-- Angle in degrees
-- Length in pixels
-- (RANSAC only) Inlier count and confidence percentage
+**Lines:**
+- Start/end coordinates
+- Angle (degrees)
+- Length (pixels)
+- RANSAC: inlier count and confidence
 
-### Circle Detection Output
-Each detected circle includes:
+**Circles:**
 - Center coordinates (x, y)
-- Radius in pixels
-- (Blob only) Circularity score (1.0 = perfect circle)
+- Radius (pixels)
+- Blob: circularity score (1.0 = perfect)
 
-### Visualization
-- Lines drawn in different colors (Red, Green, Blue, Yellow, Magenta, Cyan)
-- Circles shown with outline, center point, and radius label
-- RANSAC lines labeled with line number and angle
-- All visualizations render on cloned image to preserve original
+**Visualization:**
+- Lines in different colors (red, green, blue, yellow, magenta, cyan)
+- Circles with outline, center point, and radius label
+- RANSAC lines labeled with number and angle
 
-## Use Cases
+## Common Use Cases
 
-**Water Bath Bottom Detection**
-- Use RANSAC Line Detection with lower Canny thresholds (30, 100)
-- First detected line represents the most prominent horizontal feature
-- Extract average Y-coordinate for water level
+**Water Bath Bottom**
+- Use RANSAC Line Detection
+- First line is usually the water bottom
+- Extract Y-coordinate for water level
 
 **Needle Tracking**
-- Use Hough Line Detection for speed or RANSAC for accuracy
-- Set minimum line length to 100 pixels, max gap to 15 pixels
-- Filter results by length to find longest line (needle shaft)
-- Calculate angle and position from endpoints
+- Use Hough (fast) or RANSAC (accurate)
+- Filter by length to find longest line
+- Get angle and position from endpoints
 
-**Calibration Sphere Detection**
-- Use Hough Circle Detection for perfect spheres
-- Set appropriate radius range based on sphere size
-- Results sorted by size for multi-sphere calibration
-- Increase param2 (accumulator threshold) to reduce false positives
+**Calibration Spheres**
+- Use Hough Circle Detection
+- Set radius range to match sphere size
+- Results sorted by size
 
-**Multi-Object Scenarios**
-- RANSAC iteratively detects multiple lines by removing inliers after each detection
-- Hough methods detect all objects simultaneously
-- Results can be filtered by position, size, or angle
+## Parameter Tuning Tips
 
-## Performance Characteristics
+**Too many false detections?**
+- Click "Auto-Calculate" then increase both thresholds by 10-20%
+- Increase Hough threshold
+- Raise Peak Height Ratio for interfaces
 
-**Speed Comparison**
-- Fastest: Blob Detection, Horizontal Interfaces, Hough Lines (10-40ms)
-- Medium: RANSAC Line Detection (20-50ms per line)
-- Slowest: Hough Circle Detection (50-150ms)
+**Missing real objects?**
+- Click "Auto-Calculate" then decrease both thresholds by 10-20%
+- Decrease Hough threshold
+- Lower Peak Height Ratio (try 0.10-0.12)
+- Try a different algorithm (e.g., Blob instead of Hough)
 
-**Accuracy in Noisy Images**
-- Highest: RANSAC (excellent outlier rejection)
-- Good: Hough methods with proper thresholding
-- Variable: Blob detection (depends on contrast)
-
-## Parameter Tuning Guidelines
-
-**Too Many False Detections**
-- Increase Canny thresholds (move sliders right)
-- Increase Hough threshold for more selective detection
-- Increase circle param2 (accumulator threshold)
-- Add post-processing filters by size, angle, or position
-
-**Missing Real Objects**
-- Decrease Canny thresholds (move sliders left)
-- Decrease Hough threshold for more sensitive detection
-- Decrease circle param2
-- Try alternative algorithm (e.g., Blob instead of Hough)
-
-**Unstable Frame-to-Frame Results**
-- Increase detection thresholds for consistency
-- Use RANSAC instead of Hough for better stability
+**Unstable results between frames?**
+- Increase thresholds for consistency
+- Use RANSAC instead of Hough
 - Process every Nth frame instead of every frame
-- Implement temporal filtering or tracking
 
-## Implementation Files
+## Speed Comparison
 
-**Core Algorithm**
-- `UltrasoundObjectDetector.java`: Main detector class with all algorithms
-- `UltrasoundDetectionExample.java`: Practical usage examples for common tasks
+- **Fastest:** Blob, Horizontal Interfaces, Hough Lines (10-40ms)
+- **Medium:** RANSAC Lines (15-40ms per line)
+- **Slowest:** Hough Circles (50-150ms)
 
-**UI Components**
-- `ObjectDetectionController.java`: JavaFX controller handling UI logic and background processing
-- `ObjectDetectionView.fxml`: UI layout with split-panel design
-- `MainView.fxml`: Integration point for Object Detection tab
-- `MainController.java`: Tab switching and controller injection
+## Accuracy
 
-**Supporting Code**
-- `ImageDataProcessor.java`: Null safety checks added to prevent crashes
-- `VideoController.java`: Exposes `getDataManager()` for frame access
-- `needle.png`: Embedded test image resource
+- **Most accurate in noise:** RANSAC
+- **Good:** Hough methods
+- **Variable:** Blob (depends on contrast)
 
-**Testing**
-- `UltrasoundObjectDetectorTest.java`: Unit tests for detector initialization
+## Files
 
+**Core:**
+- `UltrasoundObjectDetector.java`: All detection algorithms
+- `UltrasoundDetectionExample.java`: Usage examples
+
+**UI:**
+- `ObjectDetectionController.java`: UI logic
+- `ObjectDetectionView.fxml`: UI layout
+- `MainView.fxml`: Tab integration
+- `MainController.java`: Tab switching
+
+**Resources:**
+- `needle.png`: Test image

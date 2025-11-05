@@ -22,7 +22,10 @@ public class UltrasoundDetectionExample {
 
         // Use RANSAC for robust multi-line detection
         // Works for lines at any angle
-        detector.setCannyThresholds(30, 100);
+        // Auto-estimate thresholds for best results
+        double[] thresholds = detector.estimateCannyThresholds(image);
+        detector.setCannyThresholds(thresholds[0], thresholds[1]);
+        
         UltrasoundObjectDetector.LineDetectionResult result =
             detector.detectLineRANSAC(image, false);
 
@@ -64,8 +67,9 @@ public class UltrasoundDetectionExample {
     public static NeedleInfo detectNeedle(Mat image) {
         UltrasoundObjectDetector detector = new UltrasoundObjectDetector();
 
-        // Adjust parameters for needle detection
-        detector.setCannyThresholds(50, 150);
+        // Use auto-thresholds for adaptive detection
+        double[] thresholds = detector.estimateCannyThresholds(image);
+        detector.setCannyThresholds(thresholds[0], thresholds[1]);
         detector.setLineParameters(100, 15);  // Needles are usually long
         detector.setHoughThreshold(80);
 
@@ -114,8 +118,8 @@ public class UltrasoundDetectionExample {
                                                            int maxRadius) {
         UltrasoundObjectDetector detector = new UltrasoundObjectDetector();
 
-        // Set parameters for sphere detection
-        detector.setCircleParameters(1.2, 80, 100, 25, minRadius, maxRadius);
+        // Set parameters for sphere detection (optimized for ultrasound)
+        detector.setCircleParameters(1.2, 80, 100, 20, minRadius, maxRadius);
 
         UltrasoundObjectDetector.CircleDetectionResult result =
             detector.detectCircles(image, false);
@@ -133,7 +137,10 @@ public class UltrasoundDetectionExample {
     public static List<Double> detectHorizontalLayers(Mat image) {
         UltrasoundObjectDetector detector = new UltrasoundObjectDetector();
 
-        detector.setCannyThresholds(40, 120);
+        // Use auto-thresholds for best results
+        double[] thresholds = detector.estimateCannyThresholds(image);
+        detector.setCannyThresholds(thresholds[0], thresholds[1]);
+        
         UltrasoundObjectDetector.LineDetectionResult result =
             detector.detectHorizontalInterfaces(image, false);
 
@@ -156,7 +163,8 @@ public class UltrasoundDetectionExample {
             UltrasoundObjectDetector detector = new UltrasoundObjectDetector();
 
             // Detect circles (needle tip often appears as bright spot)
-            detector.setCircleParameters(1.2, 50, 100, 20, 3, 15);
+            // Optimized for ultrasound with lower param2
+            detector.setCircleParameters(1.2, 50, 100, 15, 3, 15);
             UltrasoundObjectDetector.CircleDetectionResult result =
                 detector.detectCircles(image, false);
 
@@ -216,8 +224,8 @@ public class UltrasoundDetectionExample {
     public static List<SphereInfo> detectSpheresRobust(Mat image) {
         UltrasoundObjectDetector detector = new UltrasoundObjectDetector();
 
-        // Try Hough circles first
-        detector.setCircleParameters(1.2, 50, 100, 30, 10, 200);
+        // Try Hough circles first (optimized for ultrasound)
+        detector.setCircleParameters(1.2, 80, 100, 20, 10, 200);
         UltrasoundObjectDetector.CircleDetectionResult houghResult =
             detector.detectCircles(image, false);
 
@@ -248,7 +256,9 @@ public class UltrasoundDetectionExample {
     public static void detectAndClassifyLines(Mat image) {
         UltrasoundObjectDetector detector = new UltrasoundObjectDetector();
 
-        detector.setCannyThresholds(50, 150);
+        // Auto-calculate optimal thresholds
+        double[] thresholds = detector.estimateCannyThresholds(image);
+        detector.setCannyThresholds(thresholds[0], thresholds[1]);
         detector.setLineParameters(50, 10);
         UltrasoundObjectDetector.LineDetectionResult result =
             detector.detectLinesHough(image, false);

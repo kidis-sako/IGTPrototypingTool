@@ -72,6 +72,12 @@ public class ObjectDetectionController {
     private Label maxRadiusLabel;
     
     @FXML
+    private Slider peakHeightRatioSlider;
+    
+    @FXML
+    private Label peakHeightRatioLabel;
+    
+    @FXML
     private CheckBox visualizeCheckBox;
     
     @FXML
@@ -80,7 +86,7 @@ public class ObjectDetectionController {
     private UltrasoundObjectDetector detector;
     private ImageDataManager imageDataManager;
     private Mat currentImage;
-    private String defaultImagePath = "/circle.jpg";  // Path to default image resource
+    private String defaultImagePath = "/needle.png";  // Path to default image resource
     private Logger logger = Logger.getLogger(this.getClass().getName());
     
     /**
@@ -106,10 +112,18 @@ public class ObjectDetectionController {
         // Set up parameter sliders
         setupParameterListeners();
         
+        // Set initial threshold values (optimized for ultrasound)
+        if (cannyThreshold1Slider != null && cannyThreshold2Slider != null) {
+            detector.setCannyThresholds(
+                cannyThreshold1Slider.getValue(), 
+                cannyThreshold2Slider.getValue()
+            );
+        }
+        
         // Initially visualize is checked
         visualizeCheckBox.setSelected(true);
         
-        logger.info("Object Detection Controller initialized");
+        logger.info("Object Detection Controller initialized (ultrasound-optimized defaults: 30/90)");
     }
     
     /**
@@ -148,6 +162,13 @@ public class ObjectDetectionController {
                 maxRadiusLabel.setText(String.format("%.0f", newVal.doubleValue()));
             });
         }
+        
+        if (peakHeightRatioSlider != null) {
+            peakHeightRatioSlider.valueProperty().addListener((obs, oldVal, newVal) -> {
+                peakHeightRatioLabel.setText(String.format("%.2f", newVal.doubleValue()));
+                detector.setMinPeakHeightRatio(newVal.doubleValue());
+            });
+        }
     }
     
     /**
@@ -155,6 +176,45 @@ public class ObjectDetectionController {
      */
     public void setImageDataManager(ImageDataManager manager) {
         this.imageDataManager = manager;
+    }
+    
+    /**
+     * Auto-calculate optimal Canny thresholds based on current image
+     */
+    @FXML
+    public void autoCalculateThresholds() {
+        if (currentImage == null || currentImage.empty()) {
+            showAlert("No Image", "Please load an image first before auto-calculating thresholds");
+            return;
+        }
+        
+        try {
+            // Calculate optimal thresholds using the detector's algorithm
+            double[] thresholds = detector.estimateCannyThresholds(currentImage);
+            
+            // Update UI sliders
+            Platform.runLater(() -> {
+                cannyThreshold1Slider.setValue(thresholds[0]);
+                cannyThreshold2Slider.setValue(thresholds[1]);
+                
+                resultsTextArea.clear();
+                resultsTextArea.appendText("Auto-Calculated Thresholds\n");
+                resultsTextArea.appendText("═══════════════════════════\n\n");
+                resultsTextArea.appendText(String.format("Lower Threshold: %.1f\n", thresholds[0]));
+                resultsTextArea.appendText(String.format("Upper Threshold: %.1f\n\n", thresholds[1]));
+                resultsTextArea.appendText("Thresholds have been automatically adjusted\n");
+                resultsTextArea.appendText("based on image gradient statistics.\n\n");
+                resultsTextArea.appendText("You can now run detection or manually\n");
+                resultsTextArea.appendText("fine-tune the values using the sliders.");
+            });
+            
+            logger.info(String.format("Auto-calculated thresholds: %.1f / %.1f", thresholds[0], thresholds[1]));
+            
+        } catch (Exception e) {
+            logger.warning("Failed to auto-calculate thresholds: " + e.getMessage());
+            e.printStackTrace();
+            showAlert("Error", "Failed to calculate thresholds: " + e.getMessage());
+        }
     }
     
     /**
@@ -323,9 +383,9 @@ public class ObjectDetectionController {
     }
     
     private void detectHoughCircles(boolean visualize) {
-        // Update circle parameters from sliders
+        // Update circle parameters from sliders (improved for ultrasound)
         if (minRadiusSlider != null && maxRadiusSlider != null) {
-            detector.setCircleParameters(1.2, 50, 100, 30, 
+            detector.setCircleParameters(1.2, 80, 100, 20, 
                 (int) minRadiusSlider.getValue(), 
                 (int) maxRadiusSlider.getValue());
         }
