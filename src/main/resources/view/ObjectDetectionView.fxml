@@ -63,7 +63,7 @@
                     
                     <!-- Edge Detection Parameters -->
                     <VBox spacing="8">
-                        <Label text="Edge Detection (Canny)" style="-fx-font-weight: bold; -fx-font-size: 12px;"/>
+                        <Label fx:id="cannyLabel" text="Edge Detection (Canny)" style="-fx-font-weight: bold; -fx-font-size: 12px;"/>
                         <HBox spacing="10" alignment="CENTER_LEFT">
                             <Label text="Lower Threshold:" prefWidth="120"/>
                             <Slider fx:id="cannyThreshold1Slider" min="10" max="100" value="30" 
@@ -78,7 +78,7 @@
                             <Label fx:id="cannyThreshold2Label" text="90" prefWidth="40" 
                                    style="-fx-font-weight: bold;"/>
                         </HBox>
-                        <Button text="Auto-Calculate Thresholds" onAction="#autoCalculateThresholds"
+                        <Button fx:id="autoThresholdsButton" text="Auto-Calculate Thresholds" onAction="#autoCalculateThresholds"
                                 style="-fx-font-size: 11px;" prefWidth="260"/>
                     </VBox>
                     
@@ -86,7 +86,7 @@
                     
                     <!-- Line Detection Parameters -->
                     <VBox spacing="8">
-                        <Label text="Line Detection (Hough)" style="-fx-font-weight: bold; -fx-font-size: 12px;"/>
+                        <Label fx:id="houghLabel" text="Line Detection (Hough)" style="-fx-font-weight: bold; -fx-font-size: 12px;"/>
                         <HBox spacing="10" alignment="CENTER_LEFT">
                             <Label text="Hough Threshold:" prefWidth="120"/>
                             <Slider fx:id="houghThresholdSlider" min="20" max="200" value="100" 
@@ -100,7 +100,7 @@
                     
                     <!-- Circle Detection Parameters -->
                     <VBox spacing="8">
-                        <Label text="Circle Detection" style="-fx-font-weight: bold; -fx-font-size: 12px;"/>
+                        <Label fx:id="circleLabel" text="Circle Detection" style="-fx-font-weight: bold; -fx-font-size: 12px;"/>
                         <HBox spacing="10" alignment="CENTER_LEFT">
                             <Label text="Min Radius:" prefWidth="120"/>
                             <Slider fx:id="minRadiusSlider" min="5" max="100" value="10" 
@@ -121,7 +121,7 @@
                     
                     <!-- Interface Detection Parameters -->
                     <VBox spacing="8">
-                        <Label text="Interface Detection" style="-fx-font-weight: bold; -fx-font-size: 12px;"/>
+                        <Label fx:id="interfaceLabel" text="Interface Detection" style="-fx-font-weight: bold; -fx-font-size: 12px;"/>
                         <HBox spacing="10" alignment="CENTER_LEFT">
                             <Label text="Peak Height Ratio:" prefWidth="120"/>
                             <Slider fx:id="peakHeightRatioSlider" min="0.05" max="0.5" value="0.15" 

@@ -83,10 +83,25 @@ public class ObjectDetectionController {
     @FXML
     private TitledPane parametersPanel;
     
+    @FXML
+    private Button autoThresholdsButton;
+    
+    @FXML
+    private Label cannyLabel;
+    
+    @FXML
+    private Label houghLabel;
+    
+    @FXML
+    private Label circleLabel;
+    
+    @FXML
+    private Label interfaceLabel;
+    
     private UltrasoundObjectDetector detector;
     private ImageDataManager imageDataManager;
     private Mat currentImage;
-    private String defaultImagePath = "/needle.png";  // Path to default image resource
+    private String defaultImagePath = "/circle.jpg";  // Path to default image resource
     private Logger logger = Logger.getLogger(this.getClass().getName());
     
     /**
@@ -111,6 +126,9 @@ public class ObjectDetectionController {
         
         // Set up parameter sliders
         setupParameterListeners();
+        
+        // Set up detection method change listener to enable/disable relevant parameters
+        setupDetectionMethodListener();
         
         // Set initial threshold values (optimized for ultrasound)
         if (cannyThreshold1Slider != null && cannyThreshold2Slider != null) {
@@ -168,6 +186,99 @@ public class ObjectDetectionController {
                 peakHeightRatioLabel.setText(String.format("%.2f", newVal.doubleValue()));
                 detector.setMinPeakHeightRatio(newVal.doubleValue());
             });
+        }
+    }
+    
+    /**
+     * Set up listener for detection method selection to enable/disable relevant parameters
+     */
+    private void setupDetectionMethodListener() {
+        if (detectionMethodCombo != null) {
+            detectionMethodCombo.valueProperty().addListener((obs, oldVal, newVal) -> {
+                updateParameterAvailability(newVal);
+            });
+            
+            // Initialize parameter availability for the default selection
+            updateParameterAvailability(detectionMethodCombo.getValue());
+        }
+    }
+    
+    /**
+     * Enable/disable parameters based on selected detection method
+     * 
+     * Parameter usage by algorithm:
+     * - Hough Line Detection: Canny thresholds + Hough threshold
+     * - RANSAC Line Detection: Canny thresholds only
+     * - Hough Circle Detection: Circle parameters (min/max radius)
+     * - Blob Sphere Detection: None (uses auto thresholding)
+     * - Horizontal Interfaces Detection: Canny thresholds + Peak Height Ratio
+     */
+    private void updateParameterAvailability(String selectedMethod) {
+        if (selectedMethod == null) return;
+        
+        // Default: disable all
+        boolean cannyEnabled = false;
+        boolean houghEnabled = false;
+        boolean circleEnabled = false;
+        boolean peakHeightEnabled = false;
+        
+        // Enable parameters based on selected method
+        switch (selectedMethod) {
+            case "Hough Line Detection":
+                cannyEnabled = true;
+                houghEnabled = true;
+                break;
+                
+            case "RANSAC Line Detection":
+                cannyEnabled = true;
+                break;
+                
+            case "Hough Circle Detection":
+                circleEnabled = true;
+                break;
+                
+            case "Blob Sphere Detection":
+                // No configurable parameters - uses auto thresholding
+                break;
+                
+            case "Horizontal Interfaces Detection":
+                cannyEnabled = true;
+                peakHeightEnabled = true;
+                break;
+        }
+        
+        // Apply enable/disable state to Canny threshold controls
+        setControlsEnabled(cannyEnabled, 
+            cannyLabel, cannyThreshold1Slider, cannyThreshold1Label,
+            cannyThreshold2Slider, cannyThreshold2Label,
+            autoThresholdsButton);
+        
+        // Apply enable/disable state to Hough threshold controls
+        setControlsEnabled(houghEnabled, 
+            houghLabel, houghThresholdSlider, houghThresholdLabel);
+        
+        // Apply enable/disable state to Circle detection controls
+        setControlsEnabled(circleEnabled, 
+            circleLabel, minRadiusSlider, minRadiusLabel,
+            maxRadiusSlider, maxRadiusLabel);
+        
+        // Apply enable/disable state to Peak Height Ratio controls
+        setControlsEnabled(peakHeightEnabled, 
+            interfaceLabel, peakHeightRatioSlider, peakHeightRatioLabel);
+        
+        logger.info("Updated parameter availability for: " + selectedMethod);
+    }
+    
+    /**
+     * Helper method to enable/disable multiple controls at once
+     */
+    private void setControlsEnabled(boolean enabled, javafx.scene.Node... controls) {
+        for (javafx.scene.Node control : controls) {
+            if (control != null) {
+                control.setDisable(!enabled);
+                // Optionally adjust opacity for visual feedback
+                control.setOpacity(enabled ? 1.0 : 0.5);
+            }
         }
     }
     
